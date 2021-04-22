@@ -10,7 +10,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -131,26 +130,26 @@ func RTSPSetup(url string, localIP string, seq int) (*rtsp.Session, *rtsp.Respon
 	client := rtsp.NewSession()
 	client.LocalIP = localIP
 
-	start := time.Now()
-	res, err := client.Describe(url, "Castanets RTSP/1.1")
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	// start := time.Now()
+	// res, err := client.Describe(url, "Castanets RTSP/1.1")
+	// if err != nil {
+	// 	return nil, nil, nil, err
+	// }
 
-	if res.StatusCode != 200 {
-		return nil, nil, nil, fmt.Errorf("RTSP Receved %v", res.Status)
-	}
-	log.Printf("[%d] describe response time: %d ms", seq, (int(time.Now().Sub(start)) / 1000000))
+	// if res.StatusCode != 200 {
+	// 	return nil, nil, nil, fmt.Errorf("RTSP Receved %v", res.Status)
+	// }
+	// log.Printf("[%d] describe response time: %d ms", seq, (int(time.Now().Sub(start)) / 1000000))
 
-	_, err = rtsp.ParseSdp(&io.LimitedReader{R: res.Body, N: res.ContentLength})
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	// _, err = rtsp.ParseSdp(&io.LimitedReader{R: res.Body, N: res.ContentLength})
+	// if err != nil {
+	// 	return nil, nil, nil, err
+	// }
 
 	var transport = "CIP/CIP/TCP; unicast"
 
-	start = time.Now()
-	res, err = client.Setup(url, transport, "Castanets RTSP/1.1")
+	start := time.Now()
+	res, err := client.Setup(url, transport, "Castanets RTSP/1.1")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -159,6 +158,8 @@ func RTSPSetup(url string, localIP string, seq int) (*rtsp.Session, *rtsp.Respon
 		return nil, nil, nil, fmt.Errorf("RTSP Receved %v", res.Status)
 	}
 	log.Printf("[%d] glb setup response time: %d ms", seq, (int(time.Now().Sub(start)) / 1000000))
+
+	time.Sleep(time.Duration(100000000))
 
 	strurl := res.Header.Get("Location")
 	start = time.Now()
@@ -236,8 +237,7 @@ func RTSPPlay(c *rtsp.Session, conn net.Conn, url string, id string, t int, seq 
 	heartbeat := time.Now()
 
 	for {
-
-		buf := make([]byte, 64*1024)
+		buf := make([]byte, 32*1024)
 		_, err := conn.Read(buf)
 
 		if err != nil && err != io.EOF {
@@ -254,7 +254,7 @@ func RTSPPlay(c *rtsp.Session, conn net.Conn, url string, id string, t int, seq 
 				return err
 			}
 
-			buf := make([]byte, 10*1024)
+			buf := make([]byte, 32*1024)
 			_, err := res.Body.Read(buf)
 
 			if err != nil && err != io.EOF {
@@ -270,7 +270,7 @@ func RTSPPlay(c *rtsp.Session, conn net.Conn, url string, id string, t int, seq 
 				return err
 			}
 
-			buf := make([]byte, 10*1024)
+			buf := make([]byte, 32*1024)
 			_, err := res.Body.Read(buf)
 
 			if err != nil && err != io.EOF {
@@ -282,7 +282,7 @@ func RTSPPlay(c *rtsp.Session, conn net.Conn, url string, id string, t int, seq 
 	}
 
 	for {
-		buf := make([]byte, 64*1024)
+		buf := make([]byte, 32*1024)
 		_, err := res.Body.Read(buf)
 
 		if err != nil && err != io.EOF {
@@ -301,6 +301,22 @@ func RTSPPlay(c *rtsp.Session, conn net.Conn, url string, id string, t int, seq 
 
 }
 
+// RTSPPlay "RTSP Play Fuction"
+func RTSPRewind(c *rtsp.Session, conn net.Conn, url string, id string, t int, seq int) error {
+	res, err := c.Rewind(url, id, "Castanets RTSP/1.1")
+	if err != nil {
+		return err
+	}
+
+	if res.StatusCode != 200 {
+		return fmt.Errorf("RTSP Receved %v", res.Status)
+	}
+
+	time.Sleep(time.Duration(5 * 1000000000))
+
+	return err
+}
+
 func main() {
 
 	FileName := flag.String("filename", "", "generation info file name. mandatory ")
@@ -314,7 +330,7 @@ func main() {
 	flag.Parse()
 
 	if *FileName == "" || *Address == "" {
-		log.Println("SDKGenerator v1.0.2")
+		log.Println("SDKGenerator v1.0.3")
 		flag.Usage()
 		return
 	}
@@ -362,7 +378,7 @@ func main() {
 		*SessionCount = len(cfglist)
 	}
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	//runtime.GOMAXPROCS(runtime.NumCPU())
 
 	wg := new(sync.WaitGroup)
 
@@ -414,6 +430,12 @@ func main() {
 				log.Printf("[%d] error: %s", n, err)
 				return
 			}
+
+			// err = RTSPRewind(client, conn, glburl, strings.Split(res.Header.Get("Session"), ";")[0], t, n)
+			// if err != nil {
+			// 	log.Printf("[%d] error: %s", n, err)
+			// 	return
+			// }
 
 			if *PlayInterval > 0 {
 				time.Sleep(time.Duration(*PlayInterval * 1000000000))
